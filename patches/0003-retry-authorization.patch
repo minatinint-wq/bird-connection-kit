@@ -1,0 +1,58 @@
+diff --git a/lib/Socket/messages-recv.js b/lib/Socket/messages-recv.js
+--- a/lib/Socket/messages-recv.js
++++ b/lib/Socket/messages-recv.js
+@@ -388,6 +388,9 @@ export const makeMessagesRecvSocket = (config) => {
+         const { fullMessage } = decodeMessageNode(node, authState.creds.me.id, authState.creds.me.lid || '');
+         const { key: msgKey } = fullMessage;
+         const msgId = msgKey.id;
++        // bird-persistent-retry-budget-v1: the native manager can clear its count.
++        const birdRetryKey = `${msgId}:${msgKey?.participant}`;
++        if (((await msgRetryCache.get(birdRetryKey)) || 0) >= maxMsgRetryCount) return;
+         if (messageRetryManager) {
+             // Check if we've exceeded max retries using the new system
+             if (messageRetryManager.hasExceededMaxRetries(msgId)) {
+@@ -1042,31 +1045,11 @@ export const makeMessagesRecvSocket = (config) => {
+         const participant = key.participant || remoteJid;
+         const retryCount = +retryNode.attrs.count || 1;
+         const msgId = ids[0];
+-        // Try to get messages from cache first, then fallback to getMessage
++        // bird-outbound-retry-authorization-v1: never bypass the application recipient policy.
+         const msgs = [];
+         for (const id of ids) {
+-            let msg;
+-            // Try to get from retry cache first if enabled
+-            if (messageRetryManager) {
+-                const cachedMsg = messageRetryManager.getRecentMessage(remoteJid, id);
+-                if (cachedMsg) {
+-                    msg = cachedMsg.message;
+-                    logger.debug({ jid: remoteJid, id }, 'found message in retry cache');
+-                    // Mark retry as successful since we found the message
+-                    messageRetryManager.markRetrySuccess(id);
+-                }
+-            }
+-            // Fallback to getMessage if not found in cache
+-            if (!msg) {
+-                msg = await getMessage({ ...key, id });
+-                if (msg) {
+-                    logger.debug({ jid: remoteJid, id }, 'found message via getMessage');
+-                    // Also mark as successful if found via getMessage
+-                    if (messageRetryManager) {
+-                        messageRetryManager.markRetrySuccess(id);
+-                    }
+-                }
+-            }
++            const msg = await getMessage({ ...key, id });
++            if (msg && messageRetryManager) messageRetryManager.markRetrySuccess(id);
+             msgs.push(msg);
+         }
+         // if it's the primary jid sending the request
+@@ -1151,7 +1134,8 @@ export const makeMessagesRecvSocket = (config) => {
+                         count: +retryNode.attrs.count
+                     };
+                 }
+-                await relayMessage(key.remoteJid, msg, msgRelayOpts);
++                const authorizedMessage = await getMessage({ ...key, id: ids[i] });
++                if (authorizedMessage) await relayMessage(key.remoteJid, authorizedMessage, msgRelayOpts);
+             }
+             else {
+                 logger.debug({ jid: key.remoteJid, id: ids[i] }, 'recv retry request, but message not available');

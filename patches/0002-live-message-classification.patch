@@ -1,0 +1,21 @@
+diff --git a/lib/Socket/messages-recv.js b/lib/Socket/messages-recv.js
+--- a/lib/Socket/messages-recv.js
++++ b/lib/Socket/messages-recv.js
+@@ -1429,7 +1429,7 @@ export const makeMessagesRecvSocket = (config) => {
+                     }
+                 }
+                 cleanMessage(msg, authState.creds.me.id, authState.creds.me.lid);
+-                await upsertMessage(msg, node.attrs.offline ? 'append' : 'notify');
++                await upsertMessage(msg, node.attrs.offline === '1' || node.attrs.offline === true ? 'append' : 'notify');
+             });
+         }
+         catch (error) {
+@@ -1600,7 +1600,7 @@ export const makeMessagesRecvSocket = (config) => {
+             await sendMessageAck(node, type === 'message' ? NACK_REASONS.UnhandledError : undefined);
+             return;
+         }
+-        const isOffline = !!node.attrs.offline;
++        const isOffline = node.attrs.offline === '1' || node.attrs.offline === true;
+         if (isOffline) {
+             offlineNodeProcessor.enqueue(type, node);
+         }

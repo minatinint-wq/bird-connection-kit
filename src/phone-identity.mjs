@@ -1,0 +1,2 @@
+const phoneJid=value=>/^\d{10,15}(?::\d+)?@s\.whatsapp\.net$/.test(value||'');
+export async function resolvePhoneIdentity(message,lookup){const peer=message.key?.remoteJid||'';if(phoneJid(peer))return peer;if(!/^\d+(?::\d+)?@lid$/.test(peer))return null;const alt=message.key?.remoteJidAlt;if(phoneJid(alt))return alt;try{const mapped=await lookup?.(peer);return phoneJid(mapped)?mapped:null;}catch{return null;}}
